@@ -156,7 +156,7 @@ def make_data_loader(spec, tag=''):
     for k, v in dataset[0][0].items():
         log(f'  {k}: shape={tuple(v.shape)}')
 
-    loader = DataLoader(dataset, batch_size=spec['batch_size'], num_workers=args.num_workers, shuffle=(tag=='train'), pin_memory=True)
+    loader = DataLoader(dataset, batch_size=spec['batch_size'], num_workers=args.num_workers, shuffle=(tag=='train'), pin_memory=True, persistent_workers=True)
     return loader
 
 def make_data_loaders():
