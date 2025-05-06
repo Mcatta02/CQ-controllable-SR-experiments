@@ -76,11 +76,15 @@ class TransformerBlock(nn.Module):
 
 @register('recurrent-transformer')
 class RecurrentTransformer(nn.Module):
-    def __init__(self, in_dim, out_dim, embed_dim, num_layers=4, memory_efficient=False, pos_encoding=None, n_condition=None):
+    def __init__(self, in_dim, out_dim, embed_dim, num_layers=4, memory_efficient=False, pos_encoding=None, n_condition=None, token_dim=None):
         super().__init__()
 
         self.in_dim = in_dim
+        self.embed_dim = embed_dim
+        if token_dim is None:
+            token_dim = embed_dim
         self.input_layer = nn.Conv1d(in_dim, embed_dim, kernel_size=1, stride=1, padding=0)
+        self.token_layer = nn.Conv1d(token_dim, embed_dim, kernel_size=1, stride=1, padding=0)
         self.causal_conv = CausalConv1d(True, embed_dim, embed_dim, kernel_size=3, stride=1, padding=1)
         layers = []
         for _ in range(num_layers):
@@ -145,7 +149,7 @@ class RecurrentTransformer(nn.Module):
         assert not ((x is None) and (token is None)), 'x and token cannot be None at the same time'
         if x is None:
             x = torch.zeros([token.shape[0], self.in_dim, 0], dtype=token.dtype, device=token.device)
-            latent = torch.zeros([token.shape[0], token.shape[1], 0], dtype=token.dtype, device=token.device)
+            latent = torch.zeros([token.shape[0], self.embed_dim, 0], dtype=token.dtype, device=token.device)
 
         if self.n_condition is not None:
             cond = torch.tensor([num_pred], device=token.device, dtype=token.dtype).expand(x.shape[0], 1, 1)
@@ -162,7 +166,7 @@ class RecurrentTransformer(nn.Module):
                     latent = self.n_condition_layer(latent, cond)
 
             elif token is not None:
-                token_ = token
+                token_ = self.token_layer(token)
                 if self.n_condition == 'token':
                     token_ = self.n_condition_layer(token_, cond)
                 latent = torch.cat([token_, latent], dim=-1)

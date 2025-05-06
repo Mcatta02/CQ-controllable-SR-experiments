@@ -18,7 +18,7 @@ class RecurrentLTE(nn.Module):
         dim = 4 * out_dim * block_size
         self.dim = dim
 
-        self.layer = make(rnn_spec, args={'in_dim': dim, 'out_dim': dim, 'embed_dim': embed_dim})
+        self.layer = make(rnn_spec, args={'in_dim': dim, 'out_dim': dim, 'embed_dim': embed_dim, 'token_dim': in_dim})
 
         self.phase_input = nn.Conv1d(dim + 2, in_dim, kernel_size=1, stride=1, padding=0)
         self.phase = nn.Conv1d(in_dim, out_dim * block_size, kernel_size=1, stride=1, padding=0)
