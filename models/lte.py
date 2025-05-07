@@ -12,6 +12,7 @@ class LTE(nn.Module):
         super().__init__()
 
         self.out_dim = out_dim
+        self.num_pred = num_pred
 
         self.coef = nn.Linear(in_dim, out_dim*2*num_pred)
         self.freq = nn.Linear(in_dim, out_dim*2*num_pred)
