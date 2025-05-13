@@ -1,6 +1,8 @@
 import torch
 from torch import nn
 
+import einops
+
 from utils import fourier_decoding
 from models import register, make
 
@@ -38,7 +40,8 @@ class RecurrentLTE(nn.Module):
         phase = self.phase(feat + self.phase_input(torch.cat(\
             [fourier, cell.unsqueeze(-1).expand(-1, -1, fourier.shape[-1])], dim=-2)))
         coef, freq, = self.unreshape(fourier)
-        phase = phase.view(phase.shape[:-2] + (-1,))
+        # phase = phase.view(phase.shape[:-2] + (-1,))
+        phase = einops.rearrange(phase, '... c l -> ... (l c)')
 
         decoded = fourier_decoding(coef, freq, phase, coord)
 
