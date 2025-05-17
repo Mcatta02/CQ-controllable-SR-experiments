@@ -62,7 +62,7 @@ def test():
 
     # output results to the txt file
     with open(os.path.join(save_path, 'results.txt'), 'w') as f:
-        f.write(f'PSNR: {psnr}, LPIPS: {lpips}')
+        f.write(f'PSNR: {psnr}, LPIPS: {lpips}, Inference Time: {inference_time}\n')
 
 def do_test(model, data_loader, save_dir=None, batch_size=None, validation=False):
     model.eval()
