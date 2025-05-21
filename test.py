@@ -4,6 +4,7 @@ import numpy as np
 from tqdm import tqdm
 import yaml
 import math
+from functools import partial
 
 import torch
 from torch import nn
@@ -31,7 +32,6 @@ def parse_args():
     parser.add_argument('--save_fourier', action='store_true', help='save fourier features to the save_dir')
 
     return parser.parse_args()
-
 def test():
     timer = utils.Timer()
     print('Loading Datasets...')
@@ -67,6 +67,17 @@ def test():
 def do_test(model, data_loader, save_dir=None, batch_size=None, validation=False):
     model.eval()
 
+    if config['eval_type'] is None:
+        psnr_fn = utils.calc_psnr
+    elif config['eval_type'].startswith('div2k'):
+        scale = int(config['eval_type'].split('-')[1])
+        psnr_fn = partial(utils.calc_psnr, dataset='div2k', scale=scale)
+    elif config['eval_type'].startswith('benchmark'):
+        scale = int(config['eval_type'].split('-')[1])
+        psnr_fn = partial(utils.calc_psnr, dataset='benchmark', scale=scale)
+    else:
+        raise NotImplementedError
+
     psnr = utils.Avarager()
     lpips = utils.Avarager()
     inference_time = utils.Avarager()
@@ -89,7 +100,7 @@ def do_test(model, data_loader, save_dir=None, batch_size=None, validation=False
         if validation:
             preds['recon'] = utils.denormalize(preds['recon']).clamp_(0, 1)
             targets['gt_rgb'] = utils.denormalize(targets['gt_rgb'])
-            psnr.add(utils.calc_psnr(preds['recon'], targets['gt_rgb']).item(), inputs['inp'].shape[0])
+            psnr.add(psnr_fn(preds['recon'], targets['gt_img']).item(), inputs['inp'].shape[0])
 
         else:
             preds['recon'] = preds['recon'].cuda()
@@ -114,7 +125,7 @@ def do_test(model, data_loader, save_dir=None, batch_size=None, validation=False
             preds['recon'] = utils.denormalize(preds['recon']).clamp_(0, 1)
             targets['gt_img'] = utils.denormalize(targets['gt_img'])
 
-            res = utils.calc_psnr(preds['recon'], targets['gt_img'])
+            res = psnr_fn(preds['recon'], targets['gt_img'])
             # print(res)
             psnr.add(res, inputs['inp'].shape[0])
 
