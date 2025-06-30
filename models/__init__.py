@@ -8,3 +8,4 @@ from . import miscs
 from . import rdn
 from . import swinir
 from . import rcan
+from . import rnn
