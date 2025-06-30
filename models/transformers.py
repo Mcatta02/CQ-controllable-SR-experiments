@@ -74,9 +74,9 @@ class TransformerBlock(nn.Module):
 
         return x
 
-@register('recurrent-transformer')
-class RecurrentTransformer(nn.Module):
-    def __init__(self, in_dim, out_dim, embed_dim, num_layers=4, memory_efficient=False, pos_encoding=None, n_condition=None, token_dim=None):
+@register('recurrent-network')
+class RecurrentNetwork(nn.Module):
+    def __init__(self, in_dim, out_dim, embed_dim, rnn_type, num_layers=4, n_condition=None, token_dim=None):
         super().__init__()
 
         self.in_dim = in_dim
@@ -88,7 +88,7 @@ class RecurrentTransformer(nn.Module):
         self.causal_conv = CausalConv1d(True, embed_dim, embed_dim, kernel_size=3, stride=1, padding=1)
         layers = []
         for _ in range(num_layers):
-            layers.append(CausalTransformerBlock(embed_dim, memory_efficient=memory_efficient, pos_encoding=pos_encoding))
+            layers.append(make(rnn_type, {'embed_dim': embed_dim}))
         self.layers = nn.ModuleList(layers)
 
         self.out_layer = nn.Conv1d(embed_dim, out_dim, kernel_size=1, stride=1, padding=0)
@@ -191,13 +191,14 @@ class RecurrentTransformer(nn.Module):
 
         return x[:, :, -num_pred:]
 
+@register('causal-transformer')
 class CausalTransformerBlock(TransformerBlock):
-    def __init__(self, channel, memory_efficient=False, pos_encoding=None):
-        super().__init__(channel, pos_encoding=pos_encoding)
+    def __init__(self, embed_dim, memory_efficient=False, pos_encoding=None):
+        super().__init__(embed_dim, pos_encoding=pos_encoding)
 
         attn = MemoryEfficientLinearCausalAttention if memory_efficient else LinearCausalAttention
 
-        self.attn = attn(channel, channel, pos_encoding=pos_encoding)
+        self.attn = attn(embed_dim, embed_dim, pos_encoding=pos_encoding)
 
     def recurrent(self, x, pos=None):
         """
