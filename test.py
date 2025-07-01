@@ -67,16 +67,19 @@ def test():
 def do_test(model, data_loader, save_dir=None, batch_size=None, validation=False):
     model.eval()
 
-    if config['eval_type'] is None:
-        psnr_fn = utils.calc_psnr
-    elif config['eval_type'].startswith('div2k'):
-        scale = int(config['eval_type'].split('-')[1])
-        psnr_fn = partial(utils.calc_psnr, dataset='div2k', scale=scale)
-    elif config['eval_type'].startswith('benchmark'):
-        scale = int(config['eval_type'].split('-')[1])
-        psnr_fn = partial(utils.calc_psnr, dataset='benchmark', scale=scale)
+    if not validation:
+        if config['eval_type'] is None:
+            psnr_fn = utils.calc_psnr
+        elif config['eval_type'].startswith('div2k'):
+            scale = int(config['eval_type'].split('-')[1])
+            psnr_fn = partial(utils.calc_psnr, dataset='div2k', scale=scale)
+        elif config['eval_type'].startswith('benchmark'):
+            scale = int(config['eval_type'].split('-')[1])
+            psnr_fn = partial(utils.calc_psnr, dataset='benchmark', scale=scale)
+        else:
+            raise NotImplementedError
     else:
-        raise NotImplementedError
+        psnr_fn = utils.calc_psnr
 
     psnr = utils.Avarager()
     lpips = utils.Avarager()
@@ -100,7 +103,7 @@ def do_test(model, data_loader, save_dir=None, batch_size=None, validation=False
         if validation:
             preds['recon'] = utils.denormalize(preds['recon']).clamp_(0, 1)
             targets['gt_rgb'] = utils.denormalize(targets['gt_rgb'])
-            psnr.add(psnr_fn(preds['recon'], targets['gt_img']).item(), inputs['inp'].shape[0])
+            psnr.add(psnr_fn(preds['recon'], targets['gt_rgb']).item(), inputs['inp'].shape[0])
 
         else:
             preds['recon'] = preds['recon'].cuda()
