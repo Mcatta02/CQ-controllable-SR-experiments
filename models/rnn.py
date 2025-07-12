@@ -14,7 +14,7 @@ class RNNBlock(nn.Module):
             if pos_encoding is not None else None
         self.layer = nn.Conv1d(2*embed_dim, embed_dim, kernel_size=1, stride=1, padding=0)
         self.act = nn.Tanh()
-    
+
     def recurrent(self, x, pos=None):
         """
         Args:
@@ -37,7 +37,7 @@ class RNNBlock(nn.Module):
         x = self.act(x)
 
         self.hidden = x
-        
+
         return x.permute(0, 2, 1)
 
     def flush(self):

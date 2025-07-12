@@ -27,8 +27,8 @@ val_dataset:
   dataset:
     name: image-folder
     args:
-      root_path: ./load/div2k/DIV2K_valid_HR_mini
-      first_k: 1
+      root_path: ./load/div2k/DIV2K_valid_HR
+      first_k: 20
       repeat: 160
       cache: in_memory
   wrapper:
@@ -55,10 +55,16 @@ model:
       args:
         num_pred: 64
         out_dim: 3
+        block_size: 1
+        embed_dim: 16
         rnn_spec:
-          name: recurrent-transformer
+          name: recurrent-network
           args:
-            pos_encoding: 'stochastic-position-encoding'
+            num_layers: 2
+            rnn_type:
+              name: causal-transformer
+              args:
+                pos_encoding: stochastic-position-encoding
     decoder_spec:
       name: accumulator
       args:
@@ -83,5 +89,5 @@ multi_step_lr:
   milestones: [200, 400, 600, 800]
   gamma: 0.5
 
-amp: False
+amp: True
 SEED: 123

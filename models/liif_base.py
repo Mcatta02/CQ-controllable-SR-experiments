@@ -5,7 +5,8 @@ from torch import nn
 from torch.nn import functional as F
 
 from models import register, make
-from utils import make_coord
+from utils import make_coord, fourier_decoding
+import utils
 
 @register('liif-base')
 class LIIFBase(nn.Module):
@@ -19,8 +20,10 @@ class LIIFBase(nn.Module):
         self.encoder = make(encoder_spec)
         self.decoder = make(decoder_spec)
         self.predictor = make(predictor_spec, args={'in_dim': self.encoder.out_dim})
-
+        num_params = utils.compute_num_params(self.predictor, text=False)
+        print(f'Estimated memory consumption of predictor: {num_params*32/1024}MB')
         self.num_pred = self.predictor.num_pred if hasattr(self.predictor, 'num_pred') else 1
+        self.num_preds = self.num_pred
 
     def forward(self, inp, coord, cell=None, **kwargs):
         self.gen_feat(inp)
@@ -83,11 +86,15 @@ class LIIFBase(nn.Module):
             q_feat, rel_cell, rel_coord = q_feat.view(bs, q, -1), rel_cell.view(bs, q, -1), rel_coord.view(bs, q, -1)
             out = {k: v.view(bs, q, *v.shape[1:]) for k, v in out.items()}
 
+            out['rel_coord'] = rel_coord
+
+            if self.num_pred != self.num_preds:
+                out = self.partial_reconstruction(out, 'specify', self.num_preds, length=self.num_pred)
+
             preds.append(out['pred'])
             area = torch.abs(rel_coord[:, :, 0] * rel_coord[:, :, 1])
             areas.append(area + 1e-9)
 
-            out['rel_coord'] = rel_coord
             for k, v in out.items():
                 if k not in miscs:
                     miscs[k] = []
@@ -121,3 +128,66 @@ class LIIFBase(nn.Module):
                 ret += residual
 
         return ret
+
+    def partial_reconstruction(self, pred, mode, num_pred, length=None):
+        bs, q = pred['coef'].shape[:2]
+        block_size = getattr(self.predictor, 'block_size', 1)
+
+        coef, freq = pred['coef'].view(bs * q, -1), pred['freq'].view(bs * q, -1)
+        phase, rel_coord = pred['phase'].view(bs * q, -1), pred['rel_coord'].view(bs * q, -1)
+
+        fourier = self.predictor.reshape(coef, freq)
+
+        if mode == 'random':
+            length = torch.randint(num_pred, (bs * q, 1), device=coef.device) + 1
+        elif mode == 'specify':
+            length = length
+        mask = torch.arange(num_pred, device=coef.device).expand(bs * q, num_pred) < length
+        mask = mask.unsqueeze(-2).expand(bs * q, 2*6*block_size, num_pred)
+
+        fourier = fourier * mask
+        coef, freq = self.predictor.unreshape(fourier)
+
+        decoded = fourier_decoding(coef, freq, phase, rel_coord)
+        pred = self.decoder({'decoded': decoded}, scale=length)['pred'].view(bs, q, -1)
+        out = {
+            'decoded': decoded.view(bs, q, -1),
+            'coef': coef.view(bs, q, -1),
+            'freq': freq.view(bs, q, -1),
+            'phase': phase.view(bs, q, -1),
+            'pred': pred.view(bs, q, -1),
+        }
+
+        return out
+
+    def partial_reconstruction_debug(self, pred, mode, num_pred, length=None):
+        bs, q = pred['coef'].shape[:2]
+        block_size = getattr(self.predictor, 'block_size', 1)
+
+        coef, freq = pred['coef'].view(bs * q, -1), pred['freq'].view(bs * q, -1)
+        phase, rel_coord = pred['phase'].view(bs * q, -1), pred['rel_coord'].view(bs * q, -1)
+
+        fourier = self.predictor.reshape(coef, freq)
+
+        if mode == 'random':
+            length = torch.randint(num_pred, (bs * q, 1), device=coef.device) + 1
+        elif mode == 'specify':
+            length = length
+        mask = torch.arange(num_pred, device=coef.device).expand(bs * q, num_pred) < length
+        mask = mask.unsqueeze(-2).expand(bs * q, 2*6*block_size, num_pred)
+
+        fourier = fourier * mask
+        coef, freq = self.predictor.unreshape(fourier)
+
+        decoded = fourier_decoding(coef, freq, phase, rel_coord)
+        pred = self.decoder({'decoded': decoded}, scale=num_pred)['pred'].view(bs, q, -1)
+        out = {
+            'decoded': decoded,
+            'coef': coef,
+            'freq': freq,
+            'phase': phase,
+            'rel_coord': rel_coord,
+            'pred': pred,
+        }
+
+        return out

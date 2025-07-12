@@ -192,7 +192,7 @@ def prepare_training():
             scheduler = MultiStepLR(optimizer, **config['multi_step_lr'])
 
     scaler = torch.cuda.amp.GradScaler(enabled=config.get('amp'))
-    log('model: #params={}'.format(utils.compute_num_params(model, text=True)))
+    log('model: #params={}'.format(utils.compute_num_params(model, text=False)))
     return model, optimizer, scheduler, scaler, epoch_start
 
 

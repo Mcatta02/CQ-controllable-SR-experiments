@@ -9,10 +9,9 @@ train_dataset:
     name: sr-implicit-downsampled
     args:
       inp_size: 48
-      scale_max: 8
+      scale_max: 4
       augment: true
-      sample_q: 2048
-      pad_mode: reflect
+      sample_q: 128
   augmenter:
     name: compose
     args:
@@ -37,7 +36,7 @@ val_dataset:
     args:
       inp_size: 48
       scale_max: 4
-      sample_q: 2048
+      sample_q: 128
   batch_size: 16
 
 data_norm:
@@ -60,15 +59,16 @@ model:
       name: accumulator
       args:
         out_dim: 3
+        scaling: true
 
 loss:
   name: compose
   args:
-  - name: l1
-    weight: 1.0
+  - name: partial-l1
     args:
-      pred_key: recon
       target_key: gt_rgb
+      mode: random
+      weight: 1.0
 
 optimizer:
   name: adam

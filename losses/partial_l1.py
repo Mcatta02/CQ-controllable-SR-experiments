@@ -61,7 +61,7 @@ def partial_reconstruction(pred, model, mode, num_pred, length=None):
         coef, freq = model.predictor.unreshape(fourier)
 
         decoded = utils.fourier_decoding(coef, freq, phase, rel_coord)
-        preds.append(model.decoder({'decoded': decoded}, scale=num_pred)['pred'].view(bs, q, -1))
+        preds.append(model.decoder({'decoded': decoded}, scale=length)['pred'].view(bs, q, -1))
 
     ret = model.reconstruct_pixels(preds, pred['area'], pred['coord'])
     return ret
