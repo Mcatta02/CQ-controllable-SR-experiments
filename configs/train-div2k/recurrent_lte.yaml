@@ -89,5 +89,6 @@ multi_step_lr:
   milestones: [200, 400, 600, 800]
   gamma: 0.5
 
-amp: True
+amp: False
+#clip_grad: 1.0
 SEED: 123

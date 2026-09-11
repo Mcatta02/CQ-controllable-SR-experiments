@@ -21,7 +21,7 @@ class LIIFBase(nn.Module):
         self.decoder = make(decoder_spec)
         self.predictor = make(predictor_spec, args={'in_dim': self.encoder.out_dim})
         num_params = utils.compute_num_params(self.predictor, text=False)
-        print(f'Estimated memory consumption of predictor: {num_params*32/1024}MB')
+        # print(f'Estimated memory consumption of predictor: {num_params*32/1024}MB')
         self.num_pred = self.predictor.num_pred if hasattr(self.predictor, 'num_pred') else 1
         self.num_preds = self.num_pred
 
@@ -105,7 +105,71 @@ class LIIFBase(nn.Module):
         miscs['area'] = areas
         miscs['coord'] = coord
 
+        self._debug = {'q_feat': q_feat.clone(), 'rel_coord': rel_coord.clone(),
+                        'rel_cell': rel_cell.clone(), 'latent': latent, 'pred_before_residual': preds[0].clone()}
+
+
         return {'recon': ret, **miscs}
+
+    #forces exactly T recurrent steps and bypasses partial_reconstruction entirely
+    def query_t(self, coord, cell, T):
+
+        feat, feat_coord = self.feat, self.feat_coord
+
+        q_feat = F.grid_sample(feat, coord.flip(-1).unsqueeze(1), mode='nearest', align_corners=False)[:, :, 0, :].permute(0, 2, 1)
+        q_coord = F.grid_sample(feat_coord, coord.flip(-1).unsqueeze(1), mode='nearest', align_corners=False)[:, :, 0, :].permute(0, 2, 1)
+
+        rel_coord = coord - q_coord
+        rel_coord[:, :, 0] *= feat.shape[-2]; rel_coord[:, :, 1] *= feat.shape[-1]
+        rel_cell = cell.clone()
+        rel_cell[:, :, 0] *= feat.shape[-2]; rel_cell[:, :, 1] *= feat.shape[-1]
+
+        bs, q = q_feat.shape[:2]
+        q_feat, rel_cell, rel_coord = (x.reshape(bs * q, -1) for x in (q_feat, rel_cell, rel_coord))
+
+        self.predictor.num_pred = T
+        latent = self.predictor(q_feat, rel_cell, rel_coord)
+        pred = self.decoder(latent, scale=T)['pred']
+
+        ret = pred.view(bs, q, -1)
+
+        if self.residual:
+            ret = ret + F.grid_sample(self.inp.to(coord.device), coord.flip(-1).unsqueeze(1),
+                mode='bilinear', padding_mode='border', align_corners=False)[:, :, 0, :].permute(0, 2, 1)
+
+            self._debug_t = {'q_feat': q_feat.clone(), 'rel_coord': rel_coord.clone(),
+                            'rel_cell': rel_cell.clone(), 'latent': latent, 'pred_before_residual': pred.view(bs, q, -1).clone()}
+
+        return ret
+
+    def adaptive_query(self, coord, cell, budget):
+        """budget: LongTensor [B, Q], same flatten order as coord. local_ensemble off for now."""
+        feat, feat_coord = self.feat, self.feat_coord
+
+        q_feat = F.grid_sample(feat, coord.flip(-1).unsqueeze(1), mode='nearest', align_corners=False)[:, :, 0, :].permute(0, 2, 1)
+        q_coord = F.grid_sample(feat_coord, coord.flip(-1).unsqueeze(1), mode='nearest', align_corners=False)[:, :, 0, :].permute(0, 2, 1)
+
+        rel_coord = coord - q_coord
+        rel_coord[:, :, 0] *= feat.shape[-2]; rel_coord[:, :, 1] *= feat.shape[-1]
+        rel_cell = cell.clone()
+        rel_cell[:, :, 0] *= feat.shape[-2]; rel_cell[:, :, 1] *= feat.shape[-1]
+
+        bs, q = q_feat.shape[:2]
+        q_feat, rel_cell, rel_coord = (x.reshape(bs * q, -1) for x in (q_feat, rel_cell, rel_coord))
+        budget_flat = budget.reshape(bs * q)
+
+        pred = torch.zeros(bs * q, self.decoder.out_dim, device=feat.device, dtype=feat.dtype)
+        for b in budget_flat.unique().tolist():
+            idx = (budget_flat == b).nonzero(as_tuple=True)[0]
+            self.predictor.num_pred = b
+            latent = self.predictor(q_feat[idx], rel_cell[idx], rel_coord[idx])
+            pred[idx] = self.decoder(latent, scale=b)['pred']
+
+        ret = pred.view(bs, q, -1)
+        if self.residual:
+            ret = ret + F.grid_sample(self.inp.to(coord.device), coord.flip(-1).unsqueeze(1),
+                mode='bilinear', padding_mode='border', align_corners=False)[:, :, 0, :].permute(0, 2, 1)
+        return {'recon': ret, 'budget': budget}
 
     def reconstruct_pixels(self, preds, areas, coord):
         total_area = torch.stack(areas).sum(dim=0)

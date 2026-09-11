@@ -117,21 +117,53 @@ def do_train(model, optimizer, scaler, data_loader):
     train_loss = utils.Avarager()
     train_loss_dict = {}
 
-    for i, (inputs, targets) in enumerate(tqdm(data_loader['train'])):
+    pbar = tqdm(data_loader['train'])
+
+    for i, (inputs, targets) in enumerate(pbar):
         optimizer.zero_grad()
+        
         inputs = {k: v.cuda() for k, v in inputs.items()}
         targets = {k: v.cuda() for k, v in targets.items()}
 
-        with torch.cuda.amp.autocast(enabled=config.get('amp'), dtype=torch.bfloat16):
+        with torch.cuda.amp.autocast(enabled=config.get('amp'), dtype=torch.float16):
             loss, loss_dict = model(inputs, targets)
 
         loss = loss.mean()
         scaler.scale(loss).backward()
 
-        # gradient clipping
-        if config.get('clip_grad') is not None:
-            scaler.unscale_(optimizer)
-            nn.utils.clip_grad_norm_(model.parameters(), max_norm=config['clip_grad'])
+        # Unscale exactly once
+        scaler.unscale_(optimizer)
+
+        # Check gradients
+        bad_grads = []
+
+        for name, p in model.named_parameters():
+            if p.grad is not None and not torch.isfinite(p.grad).all():
+                bad_grads.append(name)
+
+        if bad_grads:
+            print(f'\n!!! BAD GRADIENT at batch {i}')
+            print(f'loss       = {loss.item()}')
+            print(f'grad_scale = {scaler.get_scale()}')
+            print(f'bad params = {len(bad_grads)}')
+
+            for name in bad_grads[:20]:
+                print(f'BAD GRAD: {name}')
+
+            raise RuntimeError(
+                f"Non-finite gradient detected at batch {i}: "
+                f"{bad_grads[:20]}"
+            )
+        
+        grad_norm = torch.nn.utils.clip_grad_norm_(
+            model.parameters(),
+            max_norm=float('inf')
+        )
+
+        pbar.set_postfix(
+            loss=f'{loss.item():.6f}',
+            grad_norm=f'{grad_norm:.6f}'
+        )   
 
         scaler.step(optimizer)
         scaler.update()
