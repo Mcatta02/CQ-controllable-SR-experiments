@@ -214,6 +214,21 @@ def prepare_training():
 
     else:
         model = models.make(config['model'])
+
+        if config.get('pretrained_encoder') is not None:
+            log(f"Loading pretrained encoder from {config['pretrained_encoder']}")
+            raw = torch.load(config['pretrained_encoder'], map_location='cpu')
+            sd = raw['model']['sd']
+            encoder_sd = {k[len('encoder.'):]: v for k, v in sd.items() if k.startswith('encoder.')}
+
+            own_keys = set(model.encoder.state_dict().keys())
+            incoming_keys = set(encoder_sd.keys())
+            missing = own_keys - incoming_keys
+            unexpected = incoming_keys - own_keys
+
+            model.encoder.load_state_dict(encoder_sd, strict=False)
+            log(f"  encoder loaded — missing: {len(missing)}, unexpected: {len(unexpected)}")
+
         loss = losses.make(config['loss'], args={'model': model})
         model = ModelWithLoss(model, loss).cuda()
         optimizer = utils.make_optimizer(filter(lambda p:p.requires_grad, model.parameters()), config['optimizer'])

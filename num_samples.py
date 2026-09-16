@@ -145,18 +145,5 @@ def main():
         for i in range(start, end+1):
             wandb.log({'num_pred': i, 'psnr': psnr_per_sample[i].item(), 'lpips': lpips_per_sample[i].item()})
 
-    # start, end = args.start, args.end
-
-    # for i in range(start, end+1):
-    #     model.predictor.num_pred = i
-    #     model.num_pred = i
-    #     save_dir = os.path.join(save_path, f'num_pred_{i}')
-    #     os.makedirs(save_dir, exist_ok=True)
-    #     psnr, lpips = do_test(model, data_loader, save_dir=save_dir, batch_size=config.get('eval_bsize'))
-
-    #     if not args.debug:
-    #         wandb.log({'num_pred': i, 'psnr': psnr, 'lpips': lpips})
-
-
 if __name__ == '__main__':
     main()

@@ -21,8 +21,8 @@ warnings.filterwarnings(
 )
 
 CONFIG_PATH = 'configs/test_one.yaml'
-CHECKPOINT = './save/recurrent_lte_4gpu/epoch-50-manual.pth'
-GPU = '1'
+CHECKPOINT = './save/recurrent_lte_paper_repro/epoch-best.pth'
+GPU = '0'
 
 def load_model_and_data():
     with open(CONFIG_PATH) as f:
@@ -61,14 +61,37 @@ def run_all():
 
     # adaptive sweeps — vary the budget set to trace out different points on the curve
     budget_sets = [
-        [4, 64],
-        [4, 16, 64],
-        [4, 8, 16, 32, 64],
-        [8, 16, 32],
-        [4, 8, 16, 32],
-        [4, 8, 16]
+    [4, 8],
+    [4, 16],
+    [4, 32],
+    [4, 64],
+    [8, 16],
+    [8, 32],
+    [8, 64],
+    [16, 32],
+    [16, 64],
+    [32, 64],
+
+    [4, 8, 16],
+    [4, 8, 32],
+    [4, 8, 64],
+    [4, 16, 32],
+    [4, 16, 64],
+    [4, 32, 64],
+    [8, 16, 32],
+    [8, 16, 64],
+    [8, 32, 64],
+    [16, 32, 64],
+
+    #[4, 8, 16, 32],
+    #[4, 8, 16, 64],
+    #[4, 8, 32, 64],
+    #[4, 16, 32, 64],
+    #[8, 16, 32, 64],
+
+    #[4, 8, 16, 32, 64]
     ]
-    for metric in ['sobel', 'variance']:
+    for metric in ['sobel', 'variance','dct']:
         for budgets in budget_sets:
             test_mod.args = SimpleNamespace(
                 adaptive=True,

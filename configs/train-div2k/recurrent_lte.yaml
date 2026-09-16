@@ -11,7 +11,7 @@ train_dataset:
       inp_size: 48
       scale_max: 4
       augment: true
-      sample_q: 128
+      sample_q: 256
   augmenter:
     name: compose
     args:
@@ -36,18 +36,21 @@ val_dataset:
     args:
       inp_size: 48
       scale_max: 4
-      sample_q: 128
+      sample_q: 256
   batch_size: 16
 
 data_norm:
   mean: [0.5, 0.5, 0.5]
   std: [0.5, 0.5, 0.5]
 
+pretrained_encoder: ./pretrained/edsr-baseline-lte.pth
+
 model:
   name: liif-base
   args:
+    feat_unfold: true
     encoder_spec:
-      name: swinir
+      name: edsr-baseline
       args:
         no_upsampling: true
     predictor_spec:
@@ -60,7 +63,7 @@ model:
         rnn_spec:
           name: recurrent-network
           args:
-            num_layers: 2
+            num_layers: 4
             rnn_type:
               name: causal-transformer
               args:
@@ -90,5 +93,4 @@ multi_step_lr:
   gamma: 0.5
 
 amp: False
-#clip_grad: 1.0
 SEED: 123

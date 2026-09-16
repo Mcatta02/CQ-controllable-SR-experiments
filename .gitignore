@@ -169,6 +169,7 @@ configs/work/
 wandb
 load
 save
+pretrained
 
 # Generated experiment outputs
 results/

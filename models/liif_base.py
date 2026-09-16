@@ -19,8 +19,8 @@ class LIIFBase(nn.Module):
 
         self.encoder = make(encoder_spec)
         self.decoder = make(decoder_spec)
-        self.predictor = make(predictor_spec, args={'in_dim': self.encoder.out_dim})
-        num_params = utils.compute_num_params(self.predictor, text=False)
+        in_dim = self.encoder.out_dim * 9 if feat_unfold else self.encoder.out_dim
+        self.predictor = make(predictor_spec, args={'in_dim': in_dim})
         # print(f'Estimated memory consumption of predictor: {num_params*32/1024}MB')
         self.num_pred = self.predictor.num_pred if hasattr(self.predictor, 'num_pred') else 1
         self.num_preds = self.num_pred
@@ -115,7 +115,9 @@ class LIIFBase(nn.Module):
     def query_t(self, coord, cell, T):
 
         feat, feat_coord = self.feat, self.feat_coord
-
+        if self.feat_unfold:
+            feat = F.unfold(feat, 3, padding=1).view(
+                feat.shape[0], feat.shape[1] * 9, feat.shape[2], feat.shape[3])
         q_feat = F.grid_sample(feat, coord.flip(-1).unsqueeze(1), mode='nearest', align_corners=False)[:, :, 0, :].permute(0, 2, 1)
         q_coord = F.grid_sample(feat_coord, coord.flip(-1).unsqueeze(1), mode='nearest', align_corners=False)[:, :, 0, :].permute(0, 2, 1)
 
@@ -145,7 +147,9 @@ class LIIFBase(nn.Module):
     def adaptive_query(self, coord, cell, budget):
         """budget: LongTensor [B, Q], same flatten order as coord. local_ensemble off for now."""
         feat, feat_coord = self.feat, self.feat_coord
-
+        if self.feat_unfold:
+            feat = F.unfold(feat, 3, padding=1).view(
+                feat.shape[0], feat.shape[1] * 9, feat.shape[2], feat.shape[3])
         q_feat = F.grid_sample(feat, coord.flip(-1).unsqueeze(1), mode='nearest', align_corners=False)[:, :, 0, :].permute(0, 2, 1)
         q_coord = F.grid_sample(feat_coord, coord.flip(-1).unsqueeze(1), mode='nearest', align_corners=False)[:, :, 0, :].permute(0, 2, 1)
 
