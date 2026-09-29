@@ -176,3 +176,5 @@ results/
 marco_tests/
 *.png
 *.csv
+oracle_ceiling.py
+vis_sweep_old.py

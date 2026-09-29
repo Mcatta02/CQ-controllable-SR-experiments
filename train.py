@@ -298,6 +298,8 @@ def main():
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
     if torch.cuda.is_available():
         torch.backends.cudnn.benchmark = True
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.allow_tf32 = True
         # torch.backends.cudnn.deterministic = True
         if seed:
             torch.cuda.manual_seed(seed)

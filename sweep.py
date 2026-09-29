@@ -22,7 +22,7 @@ warnings.filterwarnings(
 
 CONFIG_PATH = 'configs/test_one.yaml'
 CHECKPOINT = './save/recurrent_lte_paper_repro/epoch-best.pth'
-GPU = '0'
+GPU = '3'
 
 def load_model_and_data():
     with open(CONFIG_PATH) as f:
@@ -32,7 +32,7 @@ def load_model_and_data():
     dataset = datasets.make(config['test_dataset']['dataset'])
     dataset = datasets.make(config['test_dataset']['wrapper'], args={'dataset': dataset})
     loader = torch.utils.data.DataLoader(dataset, batch_size=config['test_dataset']['batch_size'],
-                                          num_workers=4, pin_memory=True)
+                                          num_workers=16, pin_memory=True)
     model_spec = torch.load(CHECKPOINT)['model']
     model = models.make(model_spec, load_sd=True).cuda()
     return model, loader, config
@@ -51,7 +51,7 @@ def run_all():
         model.predictor.num_pred = np_
         model.num_pred = np_
         model.num_preds = np_
-        test_mod.args = SimpleNamespace(adaptive=False, tile_size=8, budgets=None,
+        test_mod.args = SimpleNamespace(adaptive=False, tile_size=64, budgets=None,
                                          save_img=False, save_fourier=False)
         psnr, lpips, t = test_mod.do_test(model, loader, save_dir=None,
                                            batch_size=config.get('eval_bsize'), lpips_net=lpips_net)
@@ -62,40 +62,19 @@ def run_all():
     # adaptive sweeps — vary the budget set to trace out different points on the curve
     budget_sets = [
     [4, 8],
-    [4, 16],
-    [4, 32],
-    [4, 64],
     [8, 16],
-    [8, 32],
-    [8, 64],
     [16, 32],
-    [16, 64],
     [32, 64],
 
     [4, 8, 16],
-    [4, 8, 32],
-    [4, 8, 64],
-    [4, 16, 32],
-    [4, 16, 64],
-    [4, 32, 64],
     [8, 16, 32],
-    [8, 16, 64],
-    [8, 32, 64],
-    [16, 32, 64],
-
-    #[4, 8, 16, 32],
-    #[4, 8, 16, 64],
-    #[4, 8, 32, 64],
-    #[4, 16, 32, 64],
-    #[8, 16, 32, 64],
-
-    #[4, 8, 16, 32, 64]
+    [16, 32, 64]
     ]
-    for metric in ['sobel', 'variance','dct']:
+    for metric in ['sobel']:  # can also be used with variance and dct
         for budgets in budget_sets:
             test_mod.args = SimpleNamespace(
                 adaptive=True,
-                tile_size=8,
+                tile_size=64,
                 budgets=budgets,
                 metric=metric,
                 save_img=False,
