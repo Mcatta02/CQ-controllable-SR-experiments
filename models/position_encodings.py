@@ -44,6 +44,17 @@ class LearnedPositionEncoding(nn.Module):
         return q + pos_q, k + pos_k
 
 import spe
+
+# This submodule is excluded from torch.compile's Inductor backend: it was confirmed
+# (via parity_check_compiled.py on the real checkpoint) to produce wrong output when
+# Inductor fuses/codegens through it -- max abs diff ~0.03 vs eager, while aot_eager
+# (Dynamo tracing without Inductor codegen) matched eager exactly. torch._dynamo.disable
+# forces a graph break around this forward call: it always runs in real eager mode,
+# while the surrounding layers (attention projections, layer norms, MLP, causal conv)
+# are still compiled and fused normally. This trades a small amount of fusion opportunity
+# at this one boundary for correctness, rather than losing compilation entirely.
+import torch._dynamo
+
 @register('stochastic-position-encoding')
 class StochasticPositionEncoding(nn.Module):
     def __init__(self, dim, max_len=500):
@@ -52,6 +63,7 @@ class StochasticPositionEncoding(nn.Module):
         self.spe_encoder = spe.SineSPE(num_heads=1, in_features=dim, num_realizations=dim, num_sines=5)
         self.spe_filter = spe.SPEFilter(gated=True, code_shape=self.spe_encoder.code_shape)
 
+    @torch._dynamo.disable()
     def forward(self, q, k, pos=None):
         batch, seq_length, dim = q.shape
 
@@ -68,7 +80,7 @@ class StochasticPositionEncoding(nn.Module):
         return q[:, :, 0], k[:, :, 0]
 
 if __name__ == '__main__':
-    pe = SinsodiusPositionEncoding(512)
+    pe = SinusoidalPositionEncoding(512)
     x = torch.zeros(1, 100, 512)
     y = pe(x)
     print(y)

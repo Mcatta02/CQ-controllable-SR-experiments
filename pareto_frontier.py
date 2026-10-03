@@ -1,6 +1,6 @@
 import pandas as pd
 
-FILE = "sweep_results8.csv"
+FILE = "sweep_preliminary.csv"
 
 
 def pareto_frontier(df):

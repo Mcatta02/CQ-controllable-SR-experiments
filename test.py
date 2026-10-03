@@ -55,6 +55,10 @@ def test():
     print('Preparing Model...')
     model_spec = torch.load(args.model)['model']
     model = models.make(model_spec, load_sd=True).cuda()
+    
+    from compile_hook_snippet import compile_predictor_if_requested
+    model = compile_predictor_if_requested(model)
+
     if args.num_pred is not None:
         model.predictor.num_pred = args.num_pred
         model.num_pred = args.num_pred

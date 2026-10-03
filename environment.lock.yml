@@ -131,4 +131,5 @@ dependencies:
       - tifffile==2024.2.12
       - timm==0.5.4
       - wandb==0.16.4
+      - ./others/spe
 prefix: /home/marco/miniconda3/envs/recurrent_lte

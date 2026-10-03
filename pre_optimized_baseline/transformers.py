@@ -1,11 +1,10 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from models import register, make
 
 from .attentions import *
-from .convs import CausalConv1d, make_pointwise
+from .convs import CausalConv1d
 
 @register('transformer')
 class Transformer(nn.Module):
@@ -36,9 +35,9 @@ class TransformerBlock(nn.Module):
 
         self.attn = Attention(channel, channel, num_heads=num_heads, pos_encoding=pos_encoding)
         self.conv = nn.Sequential(
-            make_pointwise(channel, channel),
+            nn.Conv1d(channel, channel, kernel_size=1, stride=1, padding=0),
             nn.GELU(),
-            make_pointwise(channel, channel),
+            nn.Conv1d(channel, channel, kernel_size=1, stride=1, padding=0),
         )
         self.norm1 = nn.LayerNorm(channel)
         self.norm2 = nn.LayerNorm(channel)
@@ -64,7 +63,9 @@ class TransformerBlock(nn.Module):
 
         residual = x
         x = self.norm2(x)
-        x = self.conv(x) # [batch, seq_length, channel]
+        x = x.permute(0, 2, 1) # [batch, channel, seq_length]
+        x = self.conv(x)
+        x = x.permute(0, 2, 1) # [batch, seq_length, channel]
         x = x + residual
 
         if token is not None:
@@ -82,16 +83,15 @@ class RecurrentNetwork(nn.Module):
         self.embed_dim = embed_dim
         if token_dim is None:
             token_dim = embed_dim
-        # pointwise layers are channels-last Linear (old Conv1d k=1 checkpoints still load)
-        self.input_layer = make_pointwise(in_dim, embed_dim)
-        self.token_layer = make_pointwise(token_dim, embed_dim)
+        self.input_layer = nn.Conv1d(in_dim, embed_dim, kernel_size=1, stride=1, padding=0)
+        self.token_layer = nn.Conv1d(token_dim, embed_dim, kernel_size=1, stride=1, padding=0)
         self.causal_conv = CausalConv1d(True, embed_dim, embed_dim, kernel_size=3, stride=1, padding=1)
         layers = []
         for _ in range(num_layers):
             layers.append(make(rnn_type, {'embed_dim': embed_dim}))
         self.layers = nn.ModuleList(layers)
 
-        self.out_layer = make_pointwise(embed_dim, out_dim)
+        self.out_layer = nn.Conv1d(embed_dim, out_dim, kernel_size=1, stride=1, padding=0)
 
         self.n_condition = n_condition
         self.n_condition_layer = make({'name': 'sft', 'args': {'in_dim': 1, 'out_dim': embed_dim}}) if n_condition else None
@@ -112,7 +112,8 @@ class RecurrentNetwork(nn.Module):
             cond = torch.tensor([num_pred], device=token.device, dtype=token.dtype).expand(x.shape[0], 1, 1)
 
         if num_pred > 0:
-            latent = self.input_layer(x.permute(0, 2, 1)) # [batch, seq_length, channel]
+            latent = self.input_layer(x)
+        latent = latent.permute(0, 2, 1) # [batch, seq_length, channel]
 
         if self.n_condition == 'step':
             latent = self.n_condition_layer(latent, cond)
@@ -131,7 +132,9 @@ class RecurrentNetwork(nn.Module):
         if token is not None:
             latent = latent[:, token_len:, :]
 
-        x = self.out_layer(latent).permute(0, 2, 1) # [batch, channel, seq_length]
+        latent = latent.permute(0, 2, 1) # [batch, channel, seq_length]
+
+        x = self.out_layer(latent)
 
         return x
 
@@ -140,57 +143,53 @@ class RecurrentNetwork(nn.Module):
         Args:
             x (tensor) : [batch, channel, seq_length]
             token (tensor) : [batch, channel, num_token]
-            num_pred (int) : total sequence length to reach
-        Returns:
-            [batch, out_dim, num_pred]
-
-        Internally everything is [batch, length, channel], so the pointwise layers are plain
-        Linear layers with no permutes, and per-step outputs are collected in a list and
-        concatenated once (instead of re-copying the growing history with torch.cat each step).
+            num_samples (int) : number of samples to generate
         """
 
         assert not ((x is None) and (token is None)), 'x and token cannot be None at the same time'
         if x is None:
-            x_prefix = token.new_zeros(token.shape[0], 0, self.in_dim) # [batch, 0, channel]
-        else:
-            x_prefix = x.transpose(1, 2) # [batch, seq_length, channel]
-        batch, prefix_len = x_prefix.shape[:2]
+            x = torch.zeros([token.shape[0], self.in_dim, 0], dtype=token.dtype, device=token.device)
+            latent = torch.zeros([token.shape[0], self.embed_dim, 0], dtype=token.dtype, device=token.device)
 
         if self.n_condition is not None:
-            cond = torch.tensor([num_pred], device=token.device, dtype=token.dtype).expand(batch, 1, 1)
+            cond = torch.tensor([num_pred], device=token.device, dtype=token.dtype).expand(x.shape[0], 1, 1)
 
         # flush the cache
         for layer in self.layers:
             layer.flush()
 
-        outs = []
-        for i in range(prefix_len, num_pred):
-            if i > 0:
-                # input at step i is element i-1 of (given prefix ++ generated outputs)
-                prev = x_prefix[:, i-1:i] if i - 1 < prefix_len else outs[-1] # [batch, 1, channel]
-                latent = self.input_layer(prev)
+        for i in range(x.shape[-1], num_pred):
+            if x.shape[-1] > 0:
+                latent = x[:, :, i-1:i] # [batch, channel, 1]
+                latent = self.input_layer(latent)
                 if self.n_condition == 'step':
-                    latent = self.n_condition_layer(latent.transpose(1, 2), cond).transpose(1, 2)
-            else:
-                latent = self.token_layer(token.transpose(1, 2)) # [batch, num_token, channel]
-                if self.n_condition == 'token':
-                    latent = self.n_condition_layer(latent.transpose(1, 2), cond).transpose(1, 2)
+                    latent = self.n_condition_layer(latent, cond)
 
-            # last position of the causal conv, computed as a single linear map
-            latent = self.causal_conv.step(latent[:, -1:, :]) # [batch, 1, channel]
+            elif token is not None:
+                token_ = self.token_layer(token)
+                if self.n_condition == 'token':
+                    token_ = self.n_condition_layer(token_, cond)
+                latent = torch.cat([token_, latent], dim=-1)
+
+            latent = self.causal_conv(F.pad(latent, (0, 1))) # [batch, channel, 2]
+
+            latent = latent.permute(0, 2, 1) # [batch, 2, channel]
+
+            latent = latent[:, -1, :].unsqueeze(-2) # [batch, 1, channel]
 
             for layer in self.layers:
                 latent = layer.recurrent(latent, pos=i)
 
-            outs.append(self.out_layer(latent)) # [batch, 1, out_dim]
+            latent = latent.permute(0, 2, 1) # [batch, channel, 1]
 
-        full = torch.cat([x_prefix] + outs, dim=1) if outs else x_prefix
+            latent = self.out_layer(latent)
+            x = torch.cat([x, latent], dim=-1)
 
         # MEMO: for debugging
         if num_pred == 0:
-            full = torch.zeros_like(full)
+            x[:, :, :] = 0
 
-        return full[:, -num_pred:].transpose(1, 2).contiguous()
+        return x[:, :, -num_pred:]
 
 @register('causal-transformer')
 class CausalTransformerBlock(TransformerBlock):
@@ -216,7 +215,9 @@ class CausalTransformerBlock(TransformerBlock):
 
         residual = x
         x = self.norm2(x)
-        x = self.conv(x) # [batch, 1, channel]
+        x = x.permute(0, 2, 1) # [batch, channel, seq_length]
+        x = self.conv(x)
+        x = x.permute(0, 2, 1) # [batch, seq_length, channel]
         x = x + residual
 
         return x

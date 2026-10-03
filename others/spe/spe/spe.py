@@ -420,12 +420,16 @@ class SPEFilter(nn.Module):
         # check shapes: size of codes should be bigger than queries, keys
         code_size = qbar.shape[1:-3]
         query_size = queries.shape[1:-2]
-        if (len(code_size) != len(query_size)
-            or torch.any(
-                torch.tensor(code_size) < torch.tensor(query_size)
-            )):
-                raise ValueError(f'Keys/queries have length {query_size}, '
-                                 f'but expected at most {code_size}')
+        # Pure-Python shape check: code_size/query_size are already tuples of
+        # ints (from .shape), so the previous torch.tensor(...)/torch.any(...)
+        # forced a GPU sync on every call for no reason -- this is just a
+        # bounds check, not model math, and is called once per attention
+        # layer per autoregressive step.
+        if len(code_size) != len(query_size) or any(
+            c < q for c, q in zip(code_size, query_size)
+        ):
+            raise ValueError(f'Keys/queries have length {query_size}, '
+                             f'but expected at most {code_size}')
         if qbar.shape[-3:-1] != queries.shape[-2:]:
             raise ValueError(f'shape mismatch. codes have shape {qbar.shape}, '
                              f'but queries are {queries.shape}')

@@ -15,9 +15,6 @@ class RNNBlock(nn.Module):
         self.layer = nn.Conv1d(2*embed_dim, embed_dim, kernel_size=1, stride=1, padding=0)
         self.act = nn.Tanh()
 
-        # hidden state always exists (None until the first step); flush() resets it to None
-        self.hidden = None
-
     def recurrent(self, x, pos=None):
         """
         Args:
@@ -29,8 +26,9 @@ class RNNBlock(nn.Module):
             pos = self.pos_encoding(pos, x.device)
             x = x + pos.unsqueeze(1)
 
-        hidden = self.hidden
-        if hidden is None:
+        try:
+            hidden = self.hidden
+        except AttributeError:
             hidden = torch.zeros(x.shape[0], x.shape[2], 1, device=x.device, dtype=x.dtype)
 
         x = x.permute(0, 2, 1) # [batch, channel, seq_length]
@@ -46,7 +44,10 @@ class RNNBlock(nn.Module):
         """
         Flush the hidden state of the RNN block.
         """
-        self.hidden = None
+        try:
+            del self.hidden
+        except AttributeError:
+            pass
 
 @register('lstm')
 class LSTMBlock(nn.Module):
@@ -60,8 +61,6 @@ class LSTMBlock(nn.Module):
 
         self.layer = nn.Conv1d(2*embed_dim, 4*embed_dim, kernel_size=1, stride=1, padding=0)
 
-        self.hidden = None
-        self.cell = None
 
     def recurrent(self, x, pos=None):
         """
@@ -77,8 +76,10 @@ class LSTMBlock(nn.Module):
         B, _, C = x.shape
 
         # Initialize hidden and cell if first step
-        h, c = self.hidden, self.cell
-        if h is None:
+        try:
+            h = self.hidden
+            c = self.cell
+        except AttributeError:
             h = torch.zeros(B, 1, C, device=x.device, dtype=x.dtype)
             c = torch.zeros(B, 1, C, device=x.device, dtype=x.dtype)
 
@@ -108,8 +109,9 @@ class LSTMBlock(nn.Module):
         """
         Flush the hidden and cell state.
         """
-        self.hidden = None
-        self.cell = None
+        for attr in ['hidden', 'cell']:
+            if hasattr(self, attr):
+                delattr(self, attr)
 
 
 @register('gru')
@@ -128,8 +130,6 @@ class GRUBlock(nn.Module):
         # candidate hidden: from [x ; (r * h)] -> embed_dim
         self.n_layer = nn.Conv1d(embed_dim * 2, embed_dim, kernel_size=1, stride=1, padding=0)
 
-        self.hidden = None
-
     def recurrent(self, x, pos=None):
         """
         Args:
@@ -145,9 +145,10 @@ class GRUBlock(nn.Module):
         B, _, C = x.shape
 
         # initialize hidden state if first step
-        h = self.hidden
-        if h is None:
+        if not hasattr(self, 'hidden'):
             h = torch.zeros(B, 1, C, device=x.device, dtype=x.dtype)
+        else:
+            h = self.hidden
 
         # 1️⃣ compute z, r gates
         concat_input = torch.cat([x, h], dim=2)  # [B, 1, 2C]
@@ -174,4 +175,5 @@ class GRUBlock(nn.Module):
 
     def flush(self):
         """Flush the hidden state."""
-        self.hidden = None
+        if hasattr(self, 'hidden'):
+            del self.hidden

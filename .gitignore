@@ -178,3 +178,4 @@ marco_tests/
 *.csv
 oracle_ceiling.py
 vis_sweep_old.py
+max_batch_results.json

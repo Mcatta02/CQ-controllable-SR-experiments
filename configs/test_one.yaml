@@ -3,7 +3,7 @@ test_dataset:
     name: image-folder
     args:
       root_path: ./load/div2k/DIV2K_valid_HR
-      first_k: 10 #n of images being tested
+      first_k: 100 #n of images being tested
       cache: in_memory
   wrapper:
     name: sr-implicit-downsampled
@@ -24,4 +24,4 @@ data_norm:
   - 0.5
 
 eval_type: div2k-3
-eval_bsize: 10000
+eval_bsize: 100000

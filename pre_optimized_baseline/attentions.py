@@ -7,8 +7,6 @@ from torch.nn import functional as F
 
 from models import register, make
 
-from .convs import make_pointwise
-
 register('attention')
 class Attention(nn.Module):
     def __init__(self, in_dim, out_dim, embed_dim=None, num_heads=1, pos_encoding=None):
@@ -17,16 +15,15 @@ class Attention(nn.Module):
         if embed_dim is None:
             embed_dim = in_dim
 
-        assert embed_dim % num_heads == 0, "embed_dim should be divisible by num_heads"
+        assert embed_dim % num_heads == 0; "embed_dim should be divisible by num_heads"
 
 
         self.num_heads = num_heads
         self.head_dim = embed_dim // num_heads
 
-        # pointwise projections on channels-last tensors (old Conv1d k=1 checkpoints still load)
-        self.q = make_pointwise(in_dim, embed_dim)
-        self.k = make_pointwise(in_dim, embed_dim)
-        self.v = make_pointwise(in_dim, out_dim)
+        self.q = nn.Conv1d(in_dim, embed_dim, kernel_size=1, stride=1, padding=0)
+        self.k = nn.Conv1d(in_dim, embed_dim, kernel_size=1, stride=1, padding=0)
+        self.v = nn.Conv1d(in_dim, out_dim, kernel_size=1, stride=1, padding=0)
 
         self.pos_encoding = make({'name': pos_encoding, 'args': {'dim': embed_dim}}) \
             if pos_encoding is not None else None
@@ -44,9 +41,10 @@ class Attention(nn.Module):
         return self.attention(q, k, v)
 
     def gen_qkv(self, x, pos=None):
-        q = self.q(x) # [batch, seq_length, embed_dim]
-        k = self.k(x) # [batch, seq_length, embed_dim]
-        v = self.v(x) # [batch, seq_length, out_dim]
+        x = x.permute(0, 2, 1) # [batch, channel, seq_length]
+        q = self.q(x).permute(0, 2, 1) # [batch, seq_length, embed_dim]
+        k = self.k(x).permute(0, 2, 1) # [batch, seq_length, embed_dim]
+        v = self.v(x).permute(0, 2, 1) # [batch, seq_length, out_dim]
 
         if self.pos_encoding is not None:
             q, k = self.pos_encoding(q, k, pos)
@@ -91,11 +89,6 @@ class LinearCausalAttention(Attention):
 
         self.feature_fn = lambda x: F.elu(x) + 1
 
-        # recurrent state; always present (None until the first step) so that flush() never
-        # deletes attributes, which forces TorchDynamo to recompile
-        self.S = None
-        self.Z = None
-
     def attention(self, q, k, v):
         q, k = self.feature_fn(q), self.feature_fn(k)
         mask = _get_causal_mask(q.shape[1]).to(q.device)
@@ -129,15 +122,14 @@ class LinearCausalAttention(Attention):
         # k = k.view(batch_size, seq_length, self.num_heads, self.head_dim)
         # v = v.view(batch_size, seq_length, self.num_heads, self.head_dim)
 
-        kt = k.transpose(1, 2)
-        if self.S is None:
-            # first step: state is just this step's contribution (no zeros + add)
-            self.S = kt @ v
-            self.Z = k
-        else:
-            # fused S + k^T v: one kernel, no [batch, C, C] temporary
-            self.S = torch.baddbmm(self.S, kt, v)
-            self.Z = self.Z + k
+        try:
+            s = self.S
+            z = self.Z
+        except:
+            s, z = torch.zeros_like(k.transpose(1, 2) @ v), torch.zeros_like(k)
+
+        self.S = s + k.transpose(1, 2) @ v
+        self.Z = z + k
 
         numerator = q @ self.S
         denominator = torch.einsum('blc,blc->bl', q, self.Z) + 1e-10
@@ -147,8 +139,11 @@ class LinearCausalAttention(Attention):
         return out
 
     def flush(self):
-        self.S = None
-        self.Z = None
+        try:
+            del self.S
+            del self.Z
+        except:
+            pass
 
 @register('memory-efficient-linear_attention')
 class MemoryEfficientLinearCausalAttention(LinearCausalAttention):

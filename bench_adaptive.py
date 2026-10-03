@@ -8,7 +8,7 @@ import models
 import datasets
 import utils
 import test as test_mod
-
+import torch._dynamo
 
 CONFIG_PATH = "configs/test_one.yaml"
 CHECKPOINT = "./save/recurrent_lte_paper_repro/epoch-best.pth"
@@ -44,7 +44,21 @@ def load_model_and_data():
     model = models.make(model_spec, load_sd=True).cuda()
     model.eval()
 
+    import os as _os
+    if _os.environ.get('COMPILE_PREDICTOR', '0') == '1':
+
+        torch._dynamo.config.cache_size_limit = max(torch._dynamo.config.cache_size_limit, 64)
+        model.predictor = torch.compile(model.predictor, dynamic=True)
+
     return model, loader, config
+
+def compile_predictor_if_requested(model):
+    if os.environ.get('COMPILE_PREDICTOR', '0') == '1':
+
+        torch._dynamo.config.cache_size_limit = max(
+            torch._dynamo.config.cache_size_limit, 64)
+        model.predictor = torch.compile(model.predictor, dynamic=True)
+    return model
 
 
 @torch.no_grad()
@@ -152,6 +166,17 @@ def profile_one_image(model, inputs, budgets):
             row_limit=30,
         )
     )
+
+    print("\nLocating sync source (small slice, stack traces)...")
+    from find_sync import install_sync_tracer
+    install_sync_tracer(max_hits=5, only_if="CQ-controllable-SR-experiments/models")
+    with profile(activities=[ProfilerActivity.CPU], with_stack=True) as prof2:
+        with torch.no_grad():
+            model.adaptive_query(coord[:, :2000], cell[:, :2000], budget[:, :2000])
+
+    print("\n========== SYNC STACK TRACE ==========")
+    print(prof2.key_averages(group_by_stack_n=8).table(
+        sort_by="cpu_time_total", row_limit=15))
 
 
 def main():
