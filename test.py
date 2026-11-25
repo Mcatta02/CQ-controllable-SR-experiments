@@ -11,7 +11,7 @@ import utils
 from torch import nn
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SequentialSampler, BatchSampler
-from difficulty import compute_tile_difficulty, difficulty_to_budget, budget_map_to_coord_order
+from suite.difficulty import compute_tile_difficulty, difficulty_to_budget, budget_map_to_coord_order
 import torchvision
 
 from lpips import LPIPS
@@ -22,6 +22,13 @@ import datasets
 import utils
 
 MAX_ENCODER_PIXELS = 2_766_240
+
+def compile_predictor_if_requested(model):
+    if os.environ.get('COMPILE_PREDICTOR', '0') == '1':
+        import torch._dynamo
+        torch._dynamo.config.cache_size_limit = max(torch._dynamo.config.cache_size_limit, 64)
+        model.predictor = torch.compile(model.predictor, dynamic=True)
+    return model
 
 def parse_args():
     parser = argparse.ArgumentParser(description='')
@@ -37,8 +44,10 @@ def parse_args():
     parser.add_argument('--adaptive', action='store_true', help='use tile-adaptive num_pred instead of fixed')
     parser.add_argument('--tile_size', type=int, default=8)
     parser.add_argument('--budgets', type=int, nargs='+', default=[4, 8, 16, 32, 64])
+    parser.add_argument('--fast', action='store_true', help='use fast recurrent path')
     
     return parser.parse_args()
+
 def test():
     timer = utils.Timer()
     print('Loading Datasets...')
@@ -56,8 +65,15 @@ def test():
     model_spec = torch.load(args.model)['model']
     model = models.make(model_spec, load_sd=True).cuda()
     
-    from compile_hook_snippet import compile_predictor_if_requested
     model = compile_predictor_if_requested(model)
+
+    if args.fast:
+        from models.convs import set_pointwise_kind
+        from models.fast_recurrent import install
+        from models.fast_post import install_fast_post
+        model = install(model, batch_size=config.get('eval_bsize'))
+        install_fast_post(model)
+        print('FAST ACTIVE:', hasattr(model.predictor.layer, '_fast'))
 
     if args.num_pred is not None:
         model.predictor.num_pred = args.num_pred
@@ -240,6 +256,9 @@ def save_imgs(img, path):
 def main():
     global args, config, save_path
     args = parse_args()
+    #if args.fast:
+    #    assert os.environ.get('COMPILE_PREDICTOR', '0') != '1', \
+    #        'Do not combine --fast with COMPILE_PREDICTOR=1'
 
     # load config
     with open(args.config, 'r') as f:

@@ -1,0 +1,73 @@
+# ---- Paths (edit these). "~" is expanded. ---------------------------------------------------
+paths:
+  orig_root:  ~/CQ-orig                          # the authors' repository (vanilla) -> baseline
+  fast_root:  ~/CQ-controllable-SR-experiments   # the implementation with the fast path. Repoint to the
+                                                 # clean folder ("only the real improvements") when it exists.
+  exp_root:   ~/CQ-controllable-SR-experiments   # must contain models/speculative.py (negative-result tests)
+  checkpoint: ~/CQ-orig/base.pth                 # the paper's released checkpoint
+  data_root:  ~/CQ-controllable-SR-experiments/load/div2k/DIV2K_valid_HR
+
+# ---- Execution ------------------------------------------------------------------------------
+gpu: "0"             # CUDA_VISIBLE_DEVICES for every worker
+python: python       # interpreter used for the workers (use the recurrent_lte environment)
+no_compile: auto     # auto: disable torch.compile when the GPU has compute capability < 7.0 (GTX 1080)
+job_timeout_s: 21600 # per worker process
+
+# ---- What "quick" (mock-up on a small GPU) and "full" (final run) mean -----------------------
+presets:
+  quick:
+    eval_bsize: 5000
+    n_main: 3
+    Ts_main: [4, 64]
+    n_adapt: 2
+    adapt_budgets: [[32, 64], [8, 16, 32, 64], [16, 32], [8, 16]]
+    n_equiv: 2
+    equiv_seeds: [0, 1, 2]
+    T_res: 16
+    res_sizes: [64, 128]
+    n_dump: 2
+    Ts_equiv: [4, 64]
+    n_time: 2
+    Ts_sweep: [1, 4, 16, 64]
+    reps: 1
+    scales: [4]
+    n_scale: 2
+    T_scale: 16
+    n_abl: 2
+    Ts_abl: [4, 16]
+    Ts_stages: [4, 64]
+    mem_bsizes: [2000, 5000]
+    mem_Ts: [4, 16, 64]
+    mem_points: 50000
+    kind_bsizes: [2000, 5000]
+    T_kind: 16
+    n_tokens: 5000
+  full:
+    eval_bsize: 150000
+    n_main: 100
+    Ts_main: [4, 8, 16, 32, 64]
+    n_adapt: 40
+    # each set is compared with fixed T = its own largest budget (64, 32 or 16).
+    adapt_budgets: [[32, 64], [16, 64], [8, 64], [16, 32, 64], [8, 16, 32, 64], [4, 8, 16, 32, 64],
+                    [16, 32], [8, 32], [8, 16, 32], [8, 16], [4, 16], [4, 8, 16]]   # last six: reference is fixed T = 32 / 16
+    n_equiv: 20
+    equiv_seeds: [0, 1, 2]       # the SAME seeds for orig and fast, so differences can be paired
+    T_res: 16
+    res_sizes: [64, 128, 256, 339]   # LR side in pixels (a full DIV2K image limits it to its own size)
+    n_dump: 4
+    Ts_equiv: [4, 16, 64]
+    n_time: 20
+    Ts_sweep: [1, 2, 4, 8, 16, 32, 64]
+    reps: 3
+    scales: [2, 2.5, 3, 3.5, 4]
+    n_scale: 20
+    T_scale: 16
+    n_abl: 20
+    Ts_abl: [4, 16, 64]
+    Ts_stages: [4, 16, 64]
+    mem_bsizes: [5000, 10000, 25000, 50000, 100000, 150000]
+    mem_Ts: [4, 16, 64]
+    mem_points: 200000
+    kind_bsizes: [5000, 25000, 100000, 150000]
+    T_kind: 64
+    n_tokens: 10000

@@ -34,6 +34,15 @@ class LIIFBase(nn.Module):
         self.feat = self.encoder(x)
         self.feat_coord = make_coord(x.shape[-2:], flatten=False).to(x.device) \
             .permute(2, 0, 1).unsqueeze(0).expand(x.shape[0], 2, *x.shape[-2:])
+        h, w = self.feat.shape[-2:]
+        self.feat_idx = torch.arange(h * w, device=x.device, dtype=torch.float32) \
+            .view(1, 1, h, w).expand(x.shape[0], 1, h, w)
+
+
+    def _fid(self, coord):
+        g = coord.flip(-1).unsqueeze(1)
+        f = F.grid_sample(self.feat_idx, g, mode='nearest', align_corners=False)
+        return f[:, 0, 0, :].round().long().reshape(-1)
 
     def query(self, coord, cell=None):
         feat = self.feat
@@ -79,7 +88,7 @@ class LIIFBase(nn.Module):
             bs, q = q_feat.shape[:2]
             q_feat, rel_cell, rel_coord = q_feat.reshape(bs * q, -1), rel_cell.reshape(bs * q, -1), rel_coord.reshape(bs * q, -1)
 
-            latent = self.predictor(q_feat, rel_cell, rel_coord)
+            latent = self.predictor(q_feat, rel_cell, rel_coord, self._fid(coord_))
             out = self.decoder(latent, scale=self.num_pred)
             # out = self.decoder(latent)
 
@@ -130,7 +139,7 @@ class LIIFBase(nn.Module):
         q_feat, rel_cell, rel_coord = (x.reshape(bs * q, -1) for x in (q_feat, rel_cell, rel_coord))
 
         self.predictor.num_pred = T
-        latent = self.predictor(q_feat, rel_cell, rel_coord)
+        latent = self.predictor(q_feat, rel_cell, rel_coord, self._fid(coord))
         pred = self.decoder(latent, scale=T)['pred']
 
         ret = pred.view(bs, q, -1)
@@ -163,10 +172,11 @@ class LIIFBase(nn.Module):
         budget_flat = budget.reshape(bs * q)
 
         pred = torch.zeros(bs * q, self.decoder.out_dim, device=feat.device, dtype=feat.dtype)
+        fid_all = self._fid(coord)
         for b in budget_flat.unique().tolist():
             idx = (budget_flat == b).nonzero(as_tuple=True)[0]
             self.predictor.num_pred = b
-            latent = self.predictor(q_feat[idx], rel_cell[idx], rel_coord[idx])
+            latent = self.predictor(q_feat[idx], rel_cell[idx], rel_coord[idx], fid_all[idx])
             pred[idx] = self.decoder(latent, scale=b)['pred']
 
         ret = pred.view(bs, q, -1)
