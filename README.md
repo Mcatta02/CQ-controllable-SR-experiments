@@ -37,12 +37,11 @@ wget http://data.vision.ee.ethz.ch/cvl/DIV2K/DIV2K_valid_HR.zip && unzip DIV2K_v
 ```
 
 **Checkpoint.** All experiments use one recurrent-LTE checkpoint, which both implementations
-load: 400 epochs, SPE causal transformer, `num_pred=64`. Place it at `pretrained/base.pth`:
+load: 400 epochs, SPE causal transformer, `num_pred=64`. Download `base.pth` from the
+[Code Ocean capsule](https://codeocean.com/capsule/7687393/tree/v1) and place it at `pretrained/base.pth`.
+Then check that you have the right file:
 
 ```bash
-mkdir -p pretrained
-# TODO(before release): download link for base.pth
-# wget <URL> -O pretrained/base.pth
 sha256sum pretrained/base.pth   # 08a8715b1e24c177ca521d380903411463ee726ad313be12dc25a4d67211a094
 ```
 
@@ -149,5 +148,6 @@ WANDB_MODE=disabled python train.py --config configs/train-div2k/recurrent_lte.y
 ## Acknowledgements
 
 The model, training code and SPE integration come from
-[CQ-controllable-SR](https://github.com/kakitamedia/CQ-controllable-SR). SPE (`others/spe`) is
+[CQ-controllable-SR](https://github.com/kakitamedia/CQ-controllable-SR) and are used with the
+author's permission. SPE (`others/spe`) is
 MIT-licensed; see [others/spe/LICENSE](others/spe/LICENSE).
