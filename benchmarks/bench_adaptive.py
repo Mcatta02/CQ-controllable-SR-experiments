@@ -1,3 +1,7 @@
+import os as _os, sys as _sys  # run from repo root: python benchmarks/<script>.py
+_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+_sys.path[:0] = [_ROOT, _os.path.join(_ROOT, 'tests')]
+
 import os
 import yaml
 import torch

@@ -4,6 +4,10 @@ that's parity_check.py). Run standalone, no "save" step needed since eager is
 computed fresh in the same run as the ground truth.
 
 """
+import os as _os, sys as _sys  # run from repo root: python tests/<script>.py
+_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+_sys.path[:0] = [_ROOT, _os.path.join(_ROOT, 'tests')]
+
 import os
 os.environ.setdefault("CUDA_VISIBLE_DEVICES", "3")
 
@@ -14,7 +18,7 @@ import torch._dynamo
 import models
 import datasets
 import utils
-from difficulty import compute_tile_difficulty, difficulty_to_budget, budget_map_to_coord_order
+from suite.difficulty import compute_tile_difficulty, difficulty_to_budget, budget_map_to_coord_order
 
 CONFIG_PATH = "configs/test_one.yaml"
 CHECKPOINT = "./save/recurrent_lte_paper_repro/epoch-best.pth"

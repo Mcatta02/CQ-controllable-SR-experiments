@@ -8,6 +8,10 @@ Runs the real checkpoint on a strided slice of one image (hits every budget) thr
 query_t (T = 4, 16, 64) and adaptive_query, with the RNG re-seeded before each call so the
 stochastic position codes match, and TF32 off so differences are only fp32 rounding.
 """
+import os as _os, sys as _sys  # run from repo root: python tests/<script>.py
+_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+_sys.path[:0] = [_ROOT, _os.path.join(_ROOT, 'tests')]
+
 import os
 import sys
 
@@ -20,7 +24,7 @@ import torch
 import models
 import datasets
 import utils
-from difficulty import compute_tile_difficulty, difficulty_to_budget, budget_map_to_coord_order
+from suite.difficulty import compute_tile_difficulty, difficulty_to_budget, budget_map_to_coord_order
 
 CONFIG_PATH = "configs/test_one.yaml"
 CHECKPOINT = "./save/recurrent_lte_paper_repro/epoch-best.pth"
