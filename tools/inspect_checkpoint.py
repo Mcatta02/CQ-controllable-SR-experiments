@@ -3,7 +3,7 @@
 Show what is inside a checkpoint: which encoder, how many generator blocks,
 and how many parameters each part has.
 
-  python inspect_checkpoint.py ~/CQ-orig/base.pth
+  python tools/inspect_checkpoint.py pretrained/base.pth
 
 Read the output like this:
   1. "Config stored in the checkpoint" -> encoder name, number of layers, T_max (if saved).

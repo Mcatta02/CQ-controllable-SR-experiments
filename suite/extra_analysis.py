@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Extra analysis for the paper (professor items 1.4, 3.1, 3.2, 3.4, 3.6, 3.7). Reads a suite run and writes
+Extra analysis for the paper. Reads a suite run and writes
 LaTeX tables + figures to <out>/ . Works on the existing archive and on new runs (it uses the sharing
 statistics and the resolution test only if they are present).
 

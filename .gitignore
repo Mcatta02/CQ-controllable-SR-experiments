@@ -173,9 +173,12 @@ pretrained
 
 # Generated experiment outputs
 results/
-marco_tests/
 *.png
 *.csv
-oracle_ceiling.py
-vis_sweep_old.py
-max_batch_results.json
+*.tar.gz
+*.pth
+extra_test_results/
+paper_extra/
+
+# Upstream baseline checkout (see README)
+third_party/

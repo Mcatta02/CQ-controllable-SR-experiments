@@ -11,8 +11,12 @@ import time
 import numpy as np
 
 
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
 def expand(p):
-    return os.path.abspath(os.path.expanduser(p))
+    """Expand "~"; relative paths are taken relative to the repository root, not the cwd."""
+    return os.path.normpath(os.path.join(REPO_ROOT, os.path.expanduser(p)))
 
 
 def sha256_file(path, chunk=1 << 22):

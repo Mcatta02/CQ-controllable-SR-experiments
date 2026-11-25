@@ -1,11 +1,10 @@
-# ---- Paths (edit these). "~" is expanded. ---------------------------------------------------
+# ---- Paths. Relative paths are resolved against the repository root; "~" is expanded. --------
 paths:
-  orig_root:  ~/CQ-orig                          # the authors' repository (vanilla) -> baseline
-  fast_root:  ~/CQ-controllable-SR-experiments   # the implementation with the fast path. Repoint to the
-                                                 # clean folder ("only the real improvements") when it exists.
-  exp_root:   ~/CQ-controllable-SR-experiments   # must contain models/speculative.py (negative-result tests)
-  checkpoint: ~/CQ-orig/base.pth                 # the paper's released checkpoint
-  data_root:  ~/CQ-controllable-SR-experiments/load/div2k/DIV2K_valid_HR
+  orig_root:  third_party/CQ-controllable-SR     # unmodified upstream repository -> baseline
+  fast_root:  .                                  # this repository (accelerated implementation)
+  exp_root:   .                                  # must contain models/speculative.py (negative-result tests)
+  checkpoint: pretrained/base.pth                # recurrent-LTE checkpoint, shared by both implementations
+  data_root:  load/div2k/DIV2K_valid_HR
 
 # ---- Execution ------------------------------------------------------------------------------
 gpu: "0"             # CUDA_VISIBLE_DEVICES for every worker
