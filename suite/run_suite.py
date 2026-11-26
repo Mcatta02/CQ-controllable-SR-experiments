@@ -31,7 +31,7 @@ def build_jobs(cfg, P, run_dir, no_compile):
 
     def spec(root, label, mode, test, **kw):
         s = dict(root=root, ckpt=paths["checkpoint"], data_root=paths["data_root"], kind="linear",
-                 no_compile=no_compile, mode=mode, scale=4, bsize=P["eval_bsize"], n_images=P["n_main"],
+                 no_compile=no_compile, mode=mode, scale=P.get("scale_main", 4), bsize=P["eval_bsize"], n_images=P["n_main"],
                  Ts=P["Ts_main"], seeds=[0], reps=1, label=label)
         s.update(kw)
         name = kw.pop("_name", label)

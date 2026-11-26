@@ -45,7 +45,7 @@ def load():
 
 
 @torch.no_grad()
-def run(model, inputs):
+def run(model, inputs, seed=0):
     inp = inputs["inp"].cuda()
     coord = inputs["coord"].cuda()
     cell = inputs["cell"].cuda()
@@ -64,9 +64,9 @@ def run(model, inputs):
 
     outs = {}
     for T in (16, 32, 64):
-        torch.manual_seed(0)
+        torch.manual_seed(seed)
         outs[f"query_t_{T}"] = model.query_t(c, ce, T).cpu()
-    torch.manual_seed(0)
+    torch.manual_seed(seed)
     outs["adaptive"] = model.adaptive_query(c, ce, b)["recon"].cpu()
     return outs
 
@@ -74,10 +74,8 @@ def run(model, inputs):
 def main():
     model, inputs = load()
 
-    torch.manual_seed(0)
-    eager_out_seed0 = run(model, inputs)
-    torch.manual_seed(1)
-    eager_out_seed1 = run(model, inputs)
+    eager_out_seed0 = run(model, inputs, seed=0)
+    eager_out_seed1 = run(model, inputs, seed=1)
     print("--- sanity check: eager vs eager, different seeds ---")
     print("(if these diffs are already ~1e-2, the model's positional encoding is")
     print(" inherently stochastic per-call, and the compiled-vs-eager FAIL below")
@@ -94,8 +92,7 @@ def main():
     # reload) is exactly what production code will actually do.
     torch._dynamo.config.cache_size_limit = 64
     model.predictor = torch.compile(model.predictor, backend="aot_eager", dynamic=False)    
-    torch.manual_seed(0)
-    compiled_out = run(model, inputs)
+    compiled_out = run(model, inputs, seed=0)
 
     print("\n--- eager (seed 0) vs compiled (seed 0) ---")
     ok = True

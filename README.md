@@ -121,12 +121,80 @@ python suite/extra_analysis.py --results suite/results/<run_id> --out paper_extr
 python suite/make_report.py suite/results/<run_id>                   # re-create figures/tables only
 ```
 
+### Extended experiments
+
+A second orchestrator, [suite/run_extra.py](suite/run_extra.py), runs experiments that go beyond the
+main suite: larger scales, larger inputs, exactness under different query arrangements and the
+local quality of adaptive inference. It uses the same config, the same one-job-per-process rule
+and the same result format; its jobs are in [suite/worker_extra.py](suite/worker_extra.py) and its
+report in [suite/extra_report.py](suite/extra_report.py).
+
+```bash
+python suite/run_extra.py --dry-run                  # list the jobs
+python suite/run_extra.py --preset quick             # smoke test (a few minutes per group)
+python suite/run_extra.py --preset full              # full run
+python suite/run_extra.py --preset full --only scale scal
+python suite/run_extra.py --report-only suite/results/extra_<run_id>
+```
+
+Results go to `suite/results/extra_<run_id>/`, the report to its `report/` folder. `--resume --run-id <id>`
+continues an interrupted run.
+
+| Group (`--only …`) | What it measures | Main outputs in `report/` |
+|---|---|---|
+| `scale` | Scales ×2 to ×12 at T = 4/16/64: time, PSNR / LPIPS, measured sharing ratio, speed-up against sharing, with a fitted cost model that gives the per-query decoding ceiling on the speed-up | `tab_scale_ext.tex`, `fig_scale_ext.pdf`, `fig_scale_quality.pdf` |
+| `scal` | LR sizes 128 to 1024 against 5k to 150k queries per call: time, peak memory, out-of-memory cases, with a fitted time and memory model | `fig_scalability.pdf`, `scal_table.csv` |
+| `noise` | Identical-noise comparison of the original and several accelerated configurations: generator outputs at every iteration, phase-head outputs and final RGB | `tab_noise_equiv.tex`, `noise_equivalence.csv` |
+| `exact` | Same noise in every call, different query arrangements: shuffled order, queries of one LR pixel split across calls, rectangle / disk / random-subset regions | `tab_arrangements.tex`, `arrangement_exact.csv` |
+| `stat` | Full images at non-integer scales, several chunk sizes and query orders, fresh noise per call: sharing ratio, time, PSNR | `arrangement_stat.csv` |
+| `advis` | Adaptive inference: budget maps, per-tile PSNR change against a noise floor, edge / texture / smooth statistics, tile-boundary discontinuities | `fig_advis_img*.pdf`, `advis_*.csv` |
+
+**How the identical-noise test works.** The original draws its SPE noise once per `model.query`
+call and shares it across all queries of that call. With the same seed:
+
+- `fast_SF` (query sharing and fused head on the original recurrent engine) uses the same random-number stream as the original, so no replay is needed;
+- `fast_SFE_replay` and `fast_SFEC_replay` (accelerated engine, eager and compiled) receive the original's noise through `replay_noise` in [models/speculative.py](models/speculative.py);
+- `fast_SFEC_ownnoise` uses the engine's own noise draw, so its differences are expected at the noise level;
+- the CUDA-graph engine cannot take injected noise. It is covered by the `exact` group instead, which re-seeds before every call.
+
+If `orig` (upstream) and `fast_none` (this repository with the fast path off) already differ, the
+two code bases consume random numbers in a different order.
+
+**Limits.**
+
+- In `scal`, LR inputs larger than DIV2K's (about 510×339) are bicubic resizes of DIV2K images, so they measure time and memory only, not quality.
+- At ×12 and 1024² LR the original implementation can run out of memory. This is recorded as a result (`oom`), not as a failure.
+- The `exact` region tests use one block of full HR rows around the image centre. A region that does not intersect the block is recorded as skipped.
+
+**Other datasets.** [suite/run_datasets.py](suite/run_datasets.py) runs the `main` experiment once
+per dataset and scale (T ∈ {4, 16, 64}) and writes `datasets_summary.csv`. It expects HR `.png` images in:
+
+| Name | Folder | Scale |
+|---|---|---|
+| `div2k_x2`, `div2k_x3`, `div2k_x4` | `load/div2k/DIV2K_valid_HR` | ×2, ×3, ×4 |
+| `bsd100` | `load/benchmark/B100/HR` | ×4 |
+| `urban100` | `load/benchmark/Urban100/HR` | ×4 |
+| `manga109` | `load/benchmark/Manga109/HR` | ×4 |
+
+```bash
+python suite/run_datasets.py --datasets div2k_x2 div2k_x3 div2k_x4 bsd100 urban100
+```
+
+Manga109 has to be requested from its authors.
+
+**Everything on one GPU.** [suite/run_a100.sh](suite/run_a100.sh) runs the main suite, the Pareto
+analysis and the extended experiments in sequence on the given GPU:
+
+```bash
+bash suite/run_a100.sh 0
+```
+
 ## 4. Repository layout
 
 | Path | Contents |
 |---|---|
 | `models/` | Model code. The accelerated path is in `fast_recurrent.py` (compiled step, SPE tables, CUDA graph) and `fast_post.py` (fused post-processing); `speculative.py` holds the speculative-decoding experiments |
-| `suite/` | Benchmark suite: `run_suite.py` (orchestrator), `worker.py` (one measurement), `make_report.py`, `env_check.py`, `difficulty.py` (tile difficulty for adaptive T) |
+| `suite/` | Benchmark suite: `run_suite.py` (orchestrator), `worker.py` (one measurement), `make_report.py`, `env_check.py`, `difficulty.py` (tile difficulty for adaptive T); extended experiments: `run_extra.py`, `worker_extra.py`, `extra_report.py`, `run_datasets.py`, `run_a100.sh` |
 | `test.py`, `train.py`, `demo.py` | Evaluation (`--fast` turns on the accelerated path), training and demo, as in the upstream repository |
 | `configs/` | Training configs (`train-div2k/`) and the test config (`test_one.yaml`) |
 | `tests/` | Standalone parity checks between the original and accelerated paths |
