@@ -256,7 +256,10 @@ def cmd_arrange_exact(spec, torch):
     records = []
     for T in spec["Ts"]:
         W.set_T(model, T)
-        run(arange[:min(n, small)], small)                 # warm-up (compilation / capture)
+        # warm-up at both chunk shapes: with CUDA graphs the first call at a new shape is the capture call,
+        # which draws its noise differently from the later replays, so it must not be the reference
+        run(arange[:min(n, small)], small)
+        run(arange, n)
         ref = run(arange, n)
         with torch.no_grad():
             torch.manual_seed(seed + 1)
@@ -266,6 +269,8 @@ def cmd_arrange_exact(spec, torch):
             if len(perm) == 0:                             # e.g. region outside a 1-row block (quick preset)
                 records.append(dict(T=T, variant=name, n_queries=0, chunk=int(chunk), skipped="empty region"))
                 continue
+            run(perm, chunk)                               # warm-up: the last chunk may be a new shape (capture call)
+            torch.cuda.synchronize()
             t0 = time.perf_counter()
             out = run(perm, chunk)
             torch.cuda.synchronize()
