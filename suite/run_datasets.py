@@ -38,8 +38,9 @@ def report(run_dir):
         if len(rec) < 2:
             continue
         for T in TS:
-            o = [r for r in rec["orig"] if r["T"] == T and not r.get("oom")]
-            f = [r for r in rec["fast"] if r["T"] == T and not r.get("oom")]
+            # skip the cold-start record of each T (it only has cold_s) and out-of-memory records
+            o = [r for r in rec["orig"] if r["T"] == T and "time_s" in r and not r.get("oom")]
+            f = [r for r in rec["fast"] if r["T"] == T and "time_s" in r and not r.get("oom")]
             if not o or not f:
                 continue
             m = lambda rs, k: float(np.mean([r[k] for r in rs]))
