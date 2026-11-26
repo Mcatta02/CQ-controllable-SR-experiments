@@ -75,7 +75,7 @@ def main():
     cfg = yaml.safe_load(open(a.config))
     roots = {k: v[0] for k, v in DATASETS.items()}
     roots.update(dict(x.split("=", 1) for x in a.root))
-    run_id = "datasets_" + time.strftime("%Y%m%d_%H%M")
+    run_id = "datasets_" + time.strftime("%Y%m%d_%H%M") + f"_gpu{cfg.get('gpu')}"   # unique when several GPUs run at once
     base = os.path.join(HERE, "results", run_id)
     for name in a.datasets:
         scale = DATASETS[name][1]
