@@ -8,8 +8,7 @@ and how many parameters each part has.
 Read the output like this:
   1. "Config stored in the checkpoint" -> encoder name, number of layers, T_max (if saved).
   2. "Parameters per top-level module"  -> the encoder (EDSR) is large (millions),
-     the recurrent predictor is small (thousands). The predictor count is the number
-     to put in the paper (compare with the 6,751 in the current draft).
+     the recurrent predictor is small (thousands).
 """
 import sys
 import collections

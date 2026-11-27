@@ -65,7 +65,7 @@ db.sqlite3-journal
 instance/
 .webassets-cache
 
-# Scrapy stuff::q!
+# Scrapy stuff:
 .scrapy
 
 # Sphinx documentation
@@ -182,3 +182,8 @@ paper_extra/
 
 # Upstream baseline checkout (see README)
 third_party/
+
+# Local run logs, generated summaries and paper material (not part of the code release)
+a100_logs/
+suite/extra/
+paper_bundle/
