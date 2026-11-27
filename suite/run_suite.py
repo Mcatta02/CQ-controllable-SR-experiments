@@ -132,6 +132,8 @@ def main():
         bad.append(f"data_root: {chk['data_root']} contains no .png files")
     if bad and not a.dry_run:
         sys.exit("Wrong paths in suite_config.yaml (nothing was run):\n  " + "\n  ".join(bad))
+    # describe the GPU the workers will use (device 0 of this process is otherwise the first physical GPU)
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(cfg.get("gpu", "0"))
     env = sl.env_info()
     nc = cfg.get("no_compile", "auto")
     if nc == "auto":

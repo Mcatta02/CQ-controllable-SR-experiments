@@ -144,6 +144,8 @@ def main():
     if a.report_only:
         return subprocess.run([sys.executable, os.path.join(HERE, "extra_report.py"), a.report_only]).returncode
     cfg = yaml.safe_load(open(a.config))
+    # describe the GPU the workers will use (device 0 of this process is otherwise the first physical GPU)
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(cfg.get("gpu", "0"))
     env = sl.env_info()
     nc = cfg.get("no_compile", "auto")
     if nc == "auto":
