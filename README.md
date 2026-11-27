@@ -18,9 +18,10 @@ checkpoint, GPU and images.
 
 ## 1. Setup
 
-**Requirements.** You need Linux and an NVIDIA GPU. The paper's results were measured on a
-Tesla V100 32 GB with Python 3.12.2, PyTorch 2.5.1 and CUDA 12.1. GPUs with compute capability
-below 7.0 also work, but `torch.compile` is then switched off automatically.
+**Requirements.** You need Linux and an NVIDIA GPU. The paper's results were measured on an
+A100 PCIe 40 GB, and the main suite was repeated on a Tesla V100 32 GB and an A100 PCIe 80 GB, all
+with Python 3.12.2, PyTorch 2.5.1 and CUDA 12.1. GPUs with compute capability below 7.0 also work,
+but `torch.compile` is then switched off automatically.
 
 ```bash
 # from the repository root
@@ -87,7 +88,7 @@ environment, the git commits of both repositories and the checkpoint hash.
 # Smoke test with a few images per experiment (about 40 min on a V100)
 python suite/run_suite.py --preset quick --report
 
-# Full run used for the paper (about 6 h on a V100)
+# Full run used for the paper (about 6 h on a V100, 5 h on an A100)
 python suite/run_suite.py --preset full --report
 ```
 

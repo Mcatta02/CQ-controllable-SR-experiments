@@ -265,8 +265,11 @@ def cmd_memory(spec, torch):
     base_mb = torch.cuda.memory_allocated() / 2 ** 20
 
     def run():
-        for ql in range(0, n, bs):
-            model.query(coord[:, ql:min(ql + bs, n)], cell[:, ql:min(ql + bs, n)])
+        # inference mode, as in batched_predict: with autograd on, the original keeps the activations of
+        # all T recurrent steps (the accelerated path disables gradients internally), which inflates its memory
+        with torch.no_grad():
+            for ql in range(0, n, bs):
+                model.query(coord[:, ql:min(ql + bs, n)], cell[:, ql:min(ql + bs, n)])
 
     records = []
     for T in spec["Ts"]:
